@@ -53,21 +53,22 @@ export default function GeneratePage() {
     const finalPrompt = `${prompt.trim()}${peopleDesc ? ` — featuring: ${peopleDesc}` : ''} — painted in ${styleLabel} style`;
 
     try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: finalPrompt,
-          enhance,
-          size: 'square',
-          count: 3,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Generation failed');
-      setGeneratedUrl(data.imageUrl);
-      if (data.imageUrls) setGeneratedUrls(data.imageUrls);
-      if (data.enhancedPrompt) setEnhancedPrompt(data.enhancedPrompt);
+      const total = 6;
+      const urls: string[] = [];
+      for (let i = 0; i < total; i++) {
+        setGenError(`Generating ${i + 1} of ${total}...`);
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: finalPrompt, size: 'square', index: i, total }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Generation failed');
+        urls.push(data.imageUrl);
+        setGeneratedUrls([...urls]);
+        if (i === 0) { setGeneratedUrl(data.imageUrl); setSelectedUrlIndex(0); }
+      }
+      setGenError(null);
     } catch (err: unknown) {
       setGenError(err instanceof Error ? err.message : 'Generation failed');
     } finally {
@@ -205,8 +206,12 @@ export default function GeneratePage() {
 
       {/* Error */}
       {genError && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3">
-          <p className="text-red-400 text-sm">{genError}</p>
+        <div className={`rounded-xl p-3 ${genError.startsWith('Generating') 
+          ? 'bg-accent/10 border border-accent/30' 
+          : 'bg-red-500/10 border border-red-500/30'}`}>
+          <p className={`text-sm ${genError.startsWith('Generating') ? 'text-accent' : 'text-red-400'}`}>
+            {genError.startsWith('Generating') ? '⏳ ' : ''}{genError}
+          </p>
         </div>
       )}
 
