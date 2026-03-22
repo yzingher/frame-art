@@ -61,8 +61,8 @@ export async function POST(req: NextRequest) {
       return { tvId: id, status: r.ok ? 'success' as const : 'error' as const, error: r.ok ? undefined : r.msg };
     });
 
-    const successful = resultsArray.filter(r => r.status === 'success').length;
-    const failed = resultsArray.filter(r => r.status === 'error').length;
+    const successful = resultsArray.filter((r: {status: string}) => r.status === 'success').length;
+    const failed = resultsArray.filter((r: {status: string}) => r.status === 'error').length;
 
     return NextResponse.json({
       success: true,
