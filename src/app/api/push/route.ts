@@ -1,8 +1,28 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getTVsByIds } from '@/lib/tv-config';
+import { rotateImage90, toJpeg } from '@/lib/image-utils';
+import { existsSync } from 'fs';
+import { readFile } from 'fs/promises';
+import path from 'path';
 
-const TV_PUSH_URL = process.env.TV_PUSH_URL || 'https://charlotte-turn-skip-bidding.trycloudflare.com';
+const IMAGE_DIR = process.env.IMAGE_DIR || '/tmp/frame-art-images';
+const PUSH_RELAY_URL = process.env.PUSH_RELAY_URL || 'https://charlotte-turn-skip-bidding.trycloudflare.com';
+
+async function fetchImageBuffer(imageUrl: string): Promise<Buffer> {
+  if (imageUrl.startsWith('/api/images/')) {
+    const filename = path.basename(imageUrl);
+    const filepath = path.join(IMAGE_DIR, path.basename(filename));
+    if (existsSync(filepath)) {
+      return readFile(filepath);
+    }
+  }
+  const fetchUrl = imageUrl.startsWith('http') ? imageUrl : `http://localhost:${process.env.PORT || 3000}${imageUrl}`;
+  const response = await fetch(fetchUrl);
+  if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
+  return Buffer.from(await response.arrayBuffer());
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,36 +32,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'imageUrl and tvIds are required' }, { status: 400 });
     }
 
-    // Fetch the image
-    const imgResp = await fetch(imageUrl.startsWith('http') ? imageUrl : `${process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : 'http://localhost:3000'}${imageUrl}`);
-    if (!imgResp.ok) {
-      return NextResponse.json({ error: 'Failed to fetch image' }, { status: 400 });
+    const tvs = getTVsByIds(tvIds);
+    if (!tvs.length) {
+      return NextResponse.json({ error: 'No valid TVs found' }, { status: 400 });
     }
-    const imgBuffer = await imgResp.arrayBuffer();
-    const imageData = Buffer.from(imgBuffer).toString('base64');
+
+    const rawBuffer = await fetchImageBuffer(imageUrl);
+    const baseBuffer = await toJpeg(rawBuffer);
+    const imageData = baseBuffer.toString('base64');
 
     // Call the OpenClaw push relay
-    const pushResp = await fetch(`${TV_PUSH_URL}/push`, {
+    const relayResp = await fetch(`${PUSH_RELAY_URL}/push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageData, tvIds }),
     });
 
-    if (!pushResp.ok) {
-      const err = await pushResp.text();
-      return NextResponse.json({ error: `Push relay error: ${err}` }, { status: 500 });
+    if (!relayResp.ok) {
+      throw new Error(`Relay error: ${relayResp.status}`);
     }
 
-    const results = await pushResp.json();
-    const allOk = Object.values(results).every((r: any) => r.ok);
+    const results = await relayResp.json();
+
+    const successful = Object.values(results as Record<string, {ok: boolean}>).filter(r => r.ok).length;
+    const failed = Object.values(results as Record<string, {ok: boolean}>).filter(r => !r.ok).length;
 
     return NextResponse.json({
-      success: allOk,
+      success: true,
+      message: `Pushed to ${successful} TV${successful !== 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}`,
       results,
-      message: allOk ? 'Pushed to all TVs' : 'Some TVs failed',
     });
-
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    console.error('Push error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to push to TVs' },
+      { status: 500 }
+    );
   }
 }
