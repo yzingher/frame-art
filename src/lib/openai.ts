@@ -48,3 +48,36 @@ export async function generateStyleTransferPrompt(
   });
   return response.choices[0]?.message?.content || `${style} style artwork`;
 }
+
+export async function generateStyleFromPhotos(
+  images: string[],
+  userPrompt: string
+): Promise<string> {
+  const imageContent = images.map(img => ({
+    type: 'image_url' as const,
+    image_url: { url: `data:image/jpeg;base64,${img}` },
+  }));
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are an expert art director. Analyze the provided reference photos and the user\'s description to create a detailed DALL-E 3 prompt. Describe the subjects from the photos (appearance, clothing, expressions) and combine them with the requested scene or style. Create a rich, gallery-quality art description. Return only the DALL-E prompt, no explanation. Keep under 400 words.',
+      },
+      {
+        role: 'user',
+        content: [
+          ...imageContent,
+          {
+            type: 'text',
+            text: `Create a DALL-E 3 prompt incorporating the people/subjects from these reference photos with this scene/style: ${userPrompt}`,
+          },
+        ],
+      },
+    ],
+    max_tokens: 500,
+  });
+  return response.choices[0]?.message?.content || userPrompt;
+}

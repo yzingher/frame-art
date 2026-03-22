@@ -2,9 +2,11 @@
 import { useState } from 'react';
 import TVGrid from '@/components/TVGrid';
 import PushButton from '@/components/PushButton';
+import PeopleToggles from '@/components/PeopleToggles';
 import { useTVSelection } from '@/hooks/useTVSelection';
 import { usePush } from '@/hooks/usePush';
 import { useArtHistory } from '@/hooks/useArtHistory';
+import { buildPersonDescriptions, PersonName } from '@/lib/people';
 
 const STYLES = [
   { id: 'realistic', label: 'Realistic', emoji: '📷' },
@@ -18,6 +20,7 @@ export default function GeneratePage() {
   const [prompt, setPrompt] = useState('');
   const [enhance, setEnhance] = useState(true);
   const [selectedStyle, setSelectedStyle] = useState('realistic');
+  const [selectedPeople, setSelectedPeople] = useState<PersonName[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [enhancedPrompt, setEnhancedPrompt] = useState<string | null>(null);
@@ -27,6 +30,12 @@ export default function GeneratePage() {
   const { pushing, results, error: pushError, push, reset } = usePush();
   const { addItem } = useArtHistory();
 
+  const togglePerson = (name: PersonName) => {
+    setSelectedPeople(prev =>
+      prev.includes(name) ? prev.filter(p => p !== name) : [...prev, name]
+    );
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     setGenerating(true);
@@ -35,12 +44,16 @@ export default function GeneratePage() {
     setEnhancedPrompt(null);
     reset();
 
+    const peopleDesc = buildPersonDescriptions(selectedPeople);
+    const styleLabel = STYLES.find(s => s.id === selectedStyle)?.label || 'Realistic';
+    const finalPrompt = `${prompt.trim()}${peopleDesc ? ` — featuring: ${peopleDesc}` : ''} — painted in ${styleLabel} style`;
+
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `${prompt} — painted in ${STYLES.find(s => s.id === selectedStyle)?.label || 'Realistic'} style`,
+          prompt: finalPrompt,
           enhance,
           size: 'square',
         }),
@@ -140,6 +153,9 @@ export default function GeneratePage() {
           </div>
         )}
       </div>
+
+      {/* People toggles */}
+      <PeopleToggles selected={selectedPeople} onToggle={togglePerson} />
 
       {/* Generated image preview */}
       {generatedUrl && (

@@ -1,18 +1,30 @@
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { openai, generateStyleTransferPrompt } from '@/lib/openai';
+import { openai, generateStyleTransferPrompt, generateStyleFromPhotos } from '@/lib/openai';
 import { saveImage } from '@/lib/storage';
 
 export async function POST(req: NextRequest) {
   try {
-    const { referenceImageBase64, style } = await req.json();
+    const body = await req.json();
 
-    if (!referenceImageBase64 || !style) {
-      return NextResponse.json({ error: 'Reference image and style are required' }, { status: 400 });
+    let dallePrompt: string;
+
+    if (body.images && Array.isArray(body.images)) {
+      // New multi-photo + prompt flow
+      const { images, prompt } = body as { images: string[]; prompt: string };
+      if (!images.length || !prompt) {
+        return NextResponse.json({ error: 'Images and prompt are required' }, { status: 400 });
+      }
+      dallePrompt = await generateStyleFromPhotos(images, prompt);
+    } else {
+      // Legacy single-image + style flow
+      const { referenceImageBase64, style } = body as { referenceImageBase64: string; style: string };
+      if (!referenceImageBase64 || !style) {
+        return NextResponse.json({ error: 'Reference image and style are required' }, { status: 400 });
+      }
+      dallePrompt = await generateStyleTransferPrompt(referenceImageBase64, style);
     }
-
-    const dallePrompt = await generateStyleTransferPrompt(referenceImageBase64, style);
 
     const response = await openai.images.generate({
       model: 'dall-e-3',
@@ -25,7 +37,6 @@ export async function POST(req: NextRequest) {
     const imageUrl = response.data?.[0]?.url;
     if (!imageUrl) throw new Error('No image URL returned');
 
-    // Download and save locally using native fetch
     const imgResponse = await fetch(imageUrl);
     if (!imgResponse.ok) throw new Error(`Failed to download image: ${imgResponse.status}`);
     const buffer = Buffer.from(await imgResponse.arrayBuffer());
