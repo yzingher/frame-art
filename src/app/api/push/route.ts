@@ -55,14 +55,15 @@ export async function POST(req: NextRequest) {
     const results = await relayResp.json();
 
     // Convert relay response to array format frontend expects
-    const resultsArray = tvIds.map((id: string) => {
-      const r = (results as Record<string, {ok: boolean, msg: string}>)[id];
-      if (!r) return { tvId: id, status: 'error' as const, error: 'No response' };
-      return { tvId: id, status: r.ok ? 'success' as const : 'error' as const, error: r.ok ? undefined : r.msg };
-    });
-
-    const successful = resultsArray.filter((r: {status: string}) => r.status === 'success').length;
-    const failed = resultsArray.filter((r: {status: string}) => r.status === 'error').length;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const relayData = results as any;
+    const successful = tvIds.filter((id: string) => relayData[id]?.ok).length;
+    const failed = tvIds.length - successful;
+    const resultsArray = tvIds.map((id: string) => ({
+      tvId: id,
+      status: relayData[id]?.ok ? 'success' : 'error',
+      error: relayData[id]?.ok ? undefined : relayData[id]?.msg,
+    }));
 
     return NextResponse.json({
       success: true,
