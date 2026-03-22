@@ -23,6 +23,8 @@ export default function GeneratePage() {
   const [selectedPeople, setSelectedPeople] = useState<PersonName[]>([]);
   const [generating, setGenerating] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+  const [generatedUrls, setGeneratedUrls] = useState<string[]>([]);
+  const [selectedUrlIndex, setSelectedUrlIndex] = useState(0);
   const [enhancedPrompt, setEnhancedPrompt] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
 
@@ -41,6 +43,8 @@ export default function GeneratePage() {
     setGenerating(true);
     setGenError(null);
     setGeneratedUrl(null);
+    setGeneratedUrls([]);
+    setSelectedUrlIndex(0);
     setEnhancedPrompt(null);
     reset();
 
@@ -56,11 +60,13 @@ export default function GeneratePage() {
           prompt: finalPrompt,
           enhance,
           size: 'square',
+          count: 6,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generation failed');
       setGeneratedUrl(data.imageUrl);
+      if (data.imageUrls) setGeneratedUrls(data.imageUrls);
       if (data.enhancedPrompt) setEnhancedPrompt(data.enhancedPrompt);
     } catch (err: unknown) {
       setGenError(err instanceof Error ? err.message : 'Generation failed');
@@ -70,11 +76,12 @@ export default function GeneratePage() {
   };
 
   const handlePush = async () => {
-    if (!generatedUrl) return;
-    const success = await push(generatedUrl, selectedIds);
+    const urlToPush = generatedUrls[selectedUrlIndex] || generatedUrl;
+    if (!urlToPush) return;
+    const success = await push(urlToPush, selectedIds);
     if (success || results.some(r => r.status === 'success')) {
       addItem({
-        imageUrl: generatedUrl,
+        imageUrl: urlToPush,
         prompt: enhancedPrompt || prompt,
         style: selectedStyle,
         source: 'generated',
@@ -159,16 +166,40 @@ export default function GeneratePage() {
 
       {/* Generated image preview */}
       {generatedUrl && (
-        <div className="rounded-2xl overflow-hidden border border-white/10 aspect-square relative">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={generatedUrl} alt="Generated art" className="w-full h-full object-cover" />
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-lg border border-white/20"
-          >
-            ↺ Regenerate
-          </button>
+        <div className="space-y-2">
+          {/* Main image */}
+          <div className="rounded-2xl overflow-hidden border border-white/10 aspect-square relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={generatedUrls[selectedUrlIndex] || generatedUrl}
+              alt="Generated art"
+              className="w-full h-full object-cover"
+            />
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-lg border border-white/20"
+            >
+              ↺ Regenerate
+            </button>
+          </div>
+          {/* Thumbnail strip — tap to select which variant to push */}
+          {generatedUrls.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {generatedUrls.map((url, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setSelectedUrlIndex(i); setGeneratedUrl(url); }}
+                  className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
+                    selectedUrlIndex === i ? 'border-accent' : 'border-white/10 opacity-60'
+                  }`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={`Variant ${i+1}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

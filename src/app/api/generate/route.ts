@@ -2,35 +2,41 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const RELAY_URL = process.env.PUSH_RELAY_URL || 'https://ranking-wisdom-bulletin-mysimon.trycloudflare.com';
+const RELAY_URL = process.env.PUSH_RELAY_URL || 'https://charlotte-turn-skip-bidding.trycloudflare.com';
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, size } = await req.json();
+    const { prompt, size, count = 1 } = await req.json();
 
     if (!prompt?.trim()) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
-    // Delegate generation to OpenClaw relay (has OpenAI key + filesystem)
-    const relayResp = await fetch(`${RELAY_URL}/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: prompt.trim(), size: size || 'square' }),
+    const numImages = Math.min(Math.max(1, count), 6);
+    
+    // Generate multiple images in parallel
+    const promises = Array.from({ length: numImages }, async (_, i) => {
+      const variantPrompt = numImages > 1 
+        ? `${prompt} (unique variation ${i + 1} of ${numImages}, different composition and angle)`
+        : prompt;
+      
+      const res = await fetch(`${RELAY_URL}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: variantPrompt, size }),
+        signal: AbortSignal.timeout(120000),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
+      return data.imageUrl as string;
     });
 
-    const data = await relayResp.json();
+    const imageUrls = await Promise.all(promises);
 
-    if (!relayResp.ok || data.error) {
-      throw new Error(data.error || 'Generation failed');
-    }
-
-    // Convert relay-images URL to full relay URL so browser can fetch it
-    const imageUrl = data.imageUrl.startsWith('/relay-images/')
-      ? `${RELAY_URL}${data.imageUrl}`
-      : data.imageUrl;
-
-    return NextResponse.json({ imageUrl });
+    return NextResponse.json({ 
+      imageUrl: imageUrls[0],
+      imageUrls,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Generation failed';
     console.error('Generate error:', err);
