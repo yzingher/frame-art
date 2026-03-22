@@ -25,7 +25,12 @@ export async function POST(req: NextRequest) {
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
 
-    return NextResponse.json({ imageUrl: data.imageUrl });
+    // Make image URL absolute so frontend can display it
+    const imageUrl = data.imageUrl.startsWith('http') 
+      ? data.imageUrl 
+      : `${RELAY_URL}${data.imageUrl}`;
+
+    return NextResponse.json({ imageUrl });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Generation failed';
     console.error('Generate error:', err);
