@@ -54,13 +54,20 @@ export async function POST(req: NextRequest) {
 
     const results = await relayResp.json();
 
-    const successful = Object.values(results as Record<string, {ok: boolean}>).filter(r => r.ok).length;
-    const failed = Object.values(results as Record<string, {ok: boolean}>).filter(r => !r.ok).length;
+    // Convert relay response to array format frontend expects
+    const resultsArray = tvIds.map((id: string) => {
+      const r = (results as Record<string, {ok: boolean, msg: string}>)[id];
+      if (!r) return { tvId: id, status: 'error' as const, error: 'No response' };
+      return { tvId: id, status: r.ok ? 'success' as const : 'error' as const, error: r.ok ? undefined : r.msg };
+    });
+
+    const successful = resultsArray.filter(r => r.status === 'success').length;
+    const failed = resultsArray.filter(r => r.status === 'error').length;
 
     return NextResponse.json({
       success: true,
       message: `Pushed to ${successful} TV${successful !== 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}`,
-      results,
+      results: resultsArray,
     });
   } catch (error) {
     console.error('Push error:', error);

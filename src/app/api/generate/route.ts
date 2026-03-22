@@ -2,7 +2,6 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { openai, enhancePrompt } from '@/lib/openai';
-import { saveImage } from '@/lib/storage';
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,16 +32,12 @@ export async function POST(req: NextRequest) {
     const imageUrl = response.data?.[0]?.url;
     if (!imageUrl) throw new Error('No image URL returned');
 
-    // Download and save locally using native fetch
-    const imgResponse = await fetch(imageUrl);
-    if (!imgResponse.ok) throw new Error(`Failed to download image: ${imgResponse.status}`);
-    const buffer = Buffer.from(await imgResponse.arrayBuffer());
-    const localUrl = await saveImage(buffer);
-
-    return NextResponse.json({ imageUrl: localUrl, enhancedPrompt });
+    // Return the OpenAI URL directly (valid for ~1 hour)
+    return NextResponse.json({ imageUrl, enhancedPrompt });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Generation failed';
-    console.error('Generate error:', err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('Generate error full:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+    console.error('API key present:', !!process.env.OPENAI_API_KEY);
+    return NextResponse.json({ error: message, debug: process.env.NODE_ENV === 'development' ? String(err) : undefined }, { status: 500 });
   }
 }
