@@ -2,9 +2,24 @@
 import { TVS } from '@/lib/tv-config';
 import { useTVSelection } from '@/hooks/useTVSelection';
 import TVCard from '@/components/TVCard';
+import { useState } from 'react';
 
 export default function TVsPage() {
   const { selectedIds, toggle } = useTVSelection();
+  const [updating, setUpdating] = useState(false);
+
+  async function handleCheckForUpdates() {
+    setUpdating(true);
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    window.location.reload();
+  }
 
   return (
     <div className="min-h-screen bg-background px-4 pt-12 pb-4 space-y-5">
@@ -41,6 +56,17 @@ export default function TVsPage() {
             onToggle={toggle}
           />
         ))}
+      </div>
+
+      {/* Check for updates */}
+      <div className="pt-2 text-center">
+        <button
+          onClick={handleCheckForUpdates}
+          disabled={updating}
+          className="text-xs text-white/20 hover:text-white/40 transition-colors"
+        >
+          {updating ? 'Updating...' : 'Check for updates'}
+        </button>
       </div>
 
       {/* Info */}
