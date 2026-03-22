@@ -60,7 +60,7 @@ export default function GeneratePage() {
           prompt: finalPrompt,
           enhance,
           size: 'square',
-          count: 6,
+          count: 3,
         }),
       });
       const data = await res.json();

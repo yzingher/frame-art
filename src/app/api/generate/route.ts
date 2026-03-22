@@ -14,8 +14,9 @@ export async function POST(req: NextRequest) {
 
     const numImages = Math.min(Math.max(1, count), 6);
     
-    // Generate multiple images in parallel
-    const promises = Array.from({ length: numImages }, async (_, i) => {
+    // Generate images sequentially to avoid timeouts
+    const imageUrls: string[] = [];
+    for (let i = 0; i < numImages; i++) {
       const variantPrompt = numImages > 1 
         ? `${prompt} (unique variation ${i + 1} of ${numImages}, different composition and angle)`
         : prompt;
@@ -28,10 +29,8 @@ export async function POST(req: NextRequest) {
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
-      return data.imageUrl as string;
-    });
-
-    const imageUrls = await Promise.all(promises);
+      imageUrls.push(data.imageUrl as string);
+    }
 
     return NextResponse.json({ 
       imageUrl: imageUrls[0],
