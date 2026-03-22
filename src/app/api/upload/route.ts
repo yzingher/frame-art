@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { saveImage } from '@/lib/storage';
 import { toJpeg } from '@/lib/image-utils';

@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getTVsByIds } from '@/lib/tv-config';
 import { pushImageToTV } from '@/lib/tv-push';
